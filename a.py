@@ -1,39 +1,38 @@
 import boto3
+import json
 
-# Configuration
-BUCKET_NAME = 'your-s3-bucket'
-MANIFEST_KEY = 'manifests/car-damage-detection-manifest.jsonl'
-PROJECT_NAME = 'car-damage-detection'
-DATASET_NAME = 'car-damage-dataset'
+# Download current manifest
+s3 = boto3.client('s3')
+response = s3.get_object(Bucket='damage-analyzer-images', Key='manifests/DamageAnalyzer-manifest.jsonl')
+content = response['Body'].read().decode('utf-8')
 
-# Initialize client
-rekognition = boto3.client('rekognition')
-
-# Create project
-try:
-    response = rekognition.create_project(ProjectName=PROJECT_NAME)
-    project_arn = response['ProjectArn']
-except:
-    projects = rekognition.describe_projects()
-    project_arn = next(p['ProjectArn'] for p in projects['ProjectDescriptions'] 
-                      if p['ProjectName'] == PROJECT_NAME)
-
-# Create dataset from manifest
-response = rekognition.create_dataset(
-    ProjectArn=project_arn,
-    DatasetType='TRAIN',
-    DatasetSource={
-        'GroundTruthManifest': {
-            'S3Object': {
-                'Bucket': BUCKET_NAME,
-                'Name': MANIFEST_KEY
-            }
+# Fix the format
+fixed_lines = []
+for line in content.strip().split('\n'):
+    entry = json.loads(line)
+    
+    # Extract the class name from damage-classification field
+    damage_class = entry.get('damage-classification', 'unknown')
+    
+    # Create correct format
+    fixed_entry = {
+        "source-ref": entry['source-ref'],
+        "damage-classification": damage_class,
+        "damage-classification-metadata": {
+            "confidence": 1.0,
+            "job-name": "car-damage-labeling", 
+            "class-name": damage_class,
+            "human-annotated": "yes"
         }
     }
+    fixed_lines.append(json.dumps(fixed_entry))
+
+# Upload fixed manifest
+fixed_content = '\n'.join(fixed_lines)
+s3.put_object(
+    Bucket='damage-analyzer-images',
+    Key='manifests/DamageAnalyzer-manifest-fixed.jsonl',
+    Body=fixed_content
 )
 
-dataset_arn = response['DatasetArn']
-
-print(f"Dataset created: {dataset_arn}")
-print(f"Project: {project_arn}")
-print("Ready for training!")
+print("Fixed manifest created!")
