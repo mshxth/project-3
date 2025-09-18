@@ -1,38 +1,36 @@
 import boto3
 import json
 
-# Download current manifest
 s3 = boto3.client('s3')
-response = s3.get_object(Bucket='damage-analyzer-images', Key='manifests/DamageAnalyzer-manifest.jsonl')
+
+# Download current manifest
+response = s3.get_object(Bucket='damage-analyzer-images', Key='manifests/DamageAnalyzer-manifest-fixed.jsonl')
 content = response['Body'].read().decode('utf-8')
 
-# Fix the format
+# Convert to the correct AWS format
 fixed_lines = []
 for line in content.strip().split('\n'):
     entry = json.loads(line)
-    
-    # Extract the class name from damage-classification field
     damage_class = entry.get('damage-classification', 'unknown')
     
-    # Create correct format
+    # Use the exact format from your screenshot
     fixed_entry = {
         "source-ref": entry['source-ref'],
-        "damage-classification": damage_class,
-        "damage-classification-metadata": {
-            "confidence": 1.0,
-            "job-name": "car-damage-labeling", 
+        "image-label": 0,  # Class index (you might need to map classes to numbers)
+        "image-label-metadata": {
             "class-name": damage_class,
-            "human-annotated": "yes"
+            "confidence": 1,
+            "type": "groundtruth/image-classification",
+            "job-name": "labeling-job/image-label"
         }
     }
     fixed_lines.append(json.dumps(fixed_entry))
 
-# Upload fixed manifest
-fixed_content = '\n'.join(fixed_lines)
+# Upload the corrected manifest
 s3.put_object(
     Bucket='damage-analyzer-images',
-    Key='manifests/DamageAnalyzer-manifest-fixed.jsonl',
-    Body=fixed_content
+    Key='manifests/DamageAnalyzer-manifest-correct.jsonl',
+    Body='\n'.join(fixed_lines)
 )
 
-print("Fixed manifest created!")
+print("Correct manifest created!")
