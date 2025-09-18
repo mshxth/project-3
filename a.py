@@ -7,30 +7,31 @@ s3 = boto3.client('s3')
 response = s3.get_object(Bucket='damage-analyzer-images', Key='manifests/DamageAnalyzer-manifest-fixed.jsonl')
 content = response['Body'].read().decode('utf-8')
 
-# Convert to the correct AWS format
+# Convert to the AWS Custom Labels format
 fixed_lines = []
 for line in content.strip().split('\n'):
     entry = json.loads(line)
     damage_class = entry.get('damage-classification', 'unknown')
     
-    # Use the exact format from your screenshot
+    # Use the exact AWS format from your screenshot
     fixed_entry = {
         "source-ref": entry['source-ref'],
-        "image-label": 0,  # Class index (you might need to map classes to numbers)
-        "image-label-metadata": {
-            "class-name": damage_class,
+        "class": damage_class,
+        "class-metadata": {
             "confidence": 1,
-            "type": "groundtruth/image-classification",
-            "job-name": "labeling-job/image-label"
+            "job-name": "labeling-job", 
+            "class-name": damage_class,
+            "human-annotated": "yes",
+            "creation-date": "2021-01-01T00:00:00.000Z"
         }
     }
     fixed_lines.append(json.dumps(fixed_entry))
 
-# Upload the corrected manifest
+# Upload the AWS-compatible manifest
 s3.put_object(
     Bucket='damage-analyzer-images',
-    Key='manifests/DamageAnalyzer-manifest-correct.jsonl',
+    Key='manifests/DamageAnalyzer-manifest-aws.jsonl',
     Body='\n'.join(fixed_lines)
 )
 
-print("Correct manifest created!")
+print("AWS-compatible manifest created: manifests/DamageAnalyzer-manifest-aws.jsonl")
